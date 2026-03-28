@@ -51,9 +51,7 @@ javascript:(()=>{ /* paste minified content here */ })();
 
 ### Option B — Use a pre-built release
 
-Download the latest `bookmarklet.min.js` from the
-[Releases](https://github.com/BPIManager/IIDX-Scraping-Bookmarklet/releases) page and follow
-the wrapping step above, or just access [https://bpi2.poyashi.me/bookmarklet.min.js](https://bpi2.poyashi.me/bookmarklet.min.js).
+Just access [https://bpi2.poyashi.me/bookmarklet.js](https://bpi2.poyashi.me/bookmarklet.js).
 
 ### Adding to your browser
 
