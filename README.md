@@ -22,6 +22,19 @@ a CSV file ready to import into [BPIM2](https://bpi2.poyashi.me/) or any other s
 
 ---
 
+## Important Security Notice
+
+**This bookmarklet runs arbitrary JavaScript on the e-AMUSEMENT GATE page using your authenticated session.  
+While this project is open source, executing modified or untrusted code could result in session data (e.g. cookies or tokens) being exposed.  
+Additionally, this endpoint dynamically serves the latest code from the main branch, so the executed script may change over time.  
+Always verify the source and use at your own risk.**
+
+> **Disclaimer:** This project is an independent fan tool and is not affiliated
+> with or endorsed by Konami Digital Entertainment Co., Ltd. Use responsibly
+> and in accordance with the e-AMUSEMENT GATE Terms of Service.
+
+---
+
 ## Installation
 
 ### Option A — Build from source (recommended)
@@ -183,10 +196,7 @@ Pull requests are welcome. When editing `bookmarklet.ts`, please:
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE.md) for details.
 
 ---
 
-> **Disclaimer:** This project is an independent fan tool and is not affiliated
-> with or endorsed by Konami Digital Entertainment Co., Ltd. Use responsibly
-> and in accordance with the e-AMUSEMENT GATE Terms of Service.
