@@ -120,7 +120,7 @@ IIDX-Scraping-Bookmarklet/
     "strict": true,
     "outFile": "dist/bookmarklet.js"
   },
-  "include": ["bpim2.ts"]
+  "include": ["bookmarklet.ts"]
 }
 ```
 
@@ -145,7 +145,7 @@ IIDX-Scraping-Bookmarklet/
 
 ## Contributing
 
-Pull requests are welcome. When editing `bpim2.ts`, please:
+Pull requests are welcome. When editing `bookmarklet.ts`, please:
 
 1. Maintain **TSDoc** comments on all exported types and public functions.
 2. Run `tsc --noEmit` to verify there are no type errors before committing.
