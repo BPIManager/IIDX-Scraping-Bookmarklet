@@ -291,6 +291,7 @@
             <button id="__iidx_btn_retry" style="margin-top:12px; width:100%; padding:10px; border-radius:8px; border:1px solid #7c3aed; color:#7c3aed; background:none;">最初からやり直す</button>
           </div>
         </div>
+        <p style="margin:0; padding:0 24px 16px; font-size:12px; color:#6b7280; text-align:center;">問題が発生した場合は <a href="https://github.com/BPIManager/IIDX-Scraping-Bookmarklet" target="_blank" style="color:#7c3aed;">GitHub</a> からIssueを報告してください</p>
       </div>
     `;
         return overlay;
@@ -427,23 +428,41 @@
             const copyBtnEl = document.getElementById("__iidx_btn_copy");
             if (autoCopied) {
                 if (bannerEl)
-                    Object.assign(bannerEl.style, { background: "#f0fdf4", border: "1px solid #bbf7d0" });
+                    Object.assign(bannerEl.style, {
+                        background: "#f0fdf4",
+                        border: "1px solid #bbf7d0",
+                    });
                 if (iconEl)
                     iconEl.textContent = "✅";
                 if (titleEl)
-                    Object.assign(titleEl, { textContent: "コピー完了", style: "font-weight:700; color:#166534;" });
+                    Object.assign(titleEl, {
+                        textContent: "コピー完了",
+                        style: "font-weight:700; color:#166534;",
+                    });
                 if (summaryEl)
-                    Object.assign(summaryEl, { textContent: `${songCount}曲（${pageCounter.value}ページ）をクリップボードにコピーしました`, style: "font-size:12px; color:#15803d;" });
+                    Object.assign(summaryEl, {
+                        textContent: `${songCount}曲（${pageCounter.value}ページ）をクリップボードにコピーしました`,
+                        style: "font-size:12px; color:#15803d;",
+                    });
             }
             else {
                 if (bannerEl)
-                    Object.assign(bannerEl.style, { background: "#fffbeb", border: "1px solid #fde68a" });
+                    Object.assign(bannerEl.style, {
+                        background: "#fffbeb",
+                        border: "1px solid #fde68a",
+                    });
                 if (iconEl)
                     iconEl.textContent = "⚠️";
                 if (titleEl)
-                    Object.assign(titleEl, { textContent: "取得完了", style: "font-weight:700; color:#92400e;" });
+                    Object.assign(titleEl, {
+                        textContent: "取得完了",
+                        style: "font-weight:700; color:#92400e;",
+                    });
                 if (summaryEl)
-                    Object.assign(summaryEl, { textContent: `${songCount}曲（${pageCounter.value}ページ）を取得しました。下のボタンでコピーしてください`, style: "font-size:12px; color:#b45309;" });
+                    Object.assign(summaryEl, {
+                        textContent: `${songCount}曲（${pageCounter.value}ページ）を取得しました。下のボタンでコピーしてください`,
+                        style: "font-size:12px; color:#b45309;",
+                    });
                 if (copyBtnEl) {
                     copyBtnEl.style.display = "block";
                     copyBtnEl.onclick = async () => {
