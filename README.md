@@ -53,6 +53,36 @@ javascript:(()=>{ /* paste minified content here */ })();
 
 Just access [https://bpi2.poyashi.me/bookmarklet.js](https://bpi2.poyashi.me/bookmarklet.js).
 
+This endpoint dynamically proxies the latest `bookmarklet.min.js` from the `main` branch of this repository:
+
+```ts
+import type { GetServerSideProps } from "next";
+
+export const getServerSideProps: GetServerSideProps = async ({ req, res }) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  res.setHeader("Content-Type", "application/javascript");
+
+  if (req.method === "OPTIONS") {
+    res.statusCode = 204;
+    res.end();
+    return { props: {} };
+  }
+
+  const script = await fetch(
+    "https://raw.githubusercontent.com/BPIManager/IIDX-Scraping-Bookmarklet/refs/heads/main/dist/bookmarklet.min.js",
+  );
+  const body = await script.text();
+
+  res.write(body);
+  res.end();
+
+  return { props: {} };
+};
+```
+
+> **This means the bookmarklet always executes the latest version from the `main` branch. Behavior may change over time as updates are pushed.**
+
 ### Adding to your browser
 
 1. Show your bookmarks bar (usually **Ctrl+Shift+B** / **⌘+Shift+B**).
