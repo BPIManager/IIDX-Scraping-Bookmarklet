@@ -340,16 +340,17 @@
           </div>
 
           <div id="__iidx_step_result" style="display:none;">
-            <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:12px; padding:14px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
-              <span style="font-size:24px;">✅</span>
+            <div id="__iidx_result_banner" style="border-radius:12px; padding:14px; margin-bottom:16px; display:flex; align-items:center; gap:12px;">
+              <span id="__iidx_result_icon" style="font-size:24px;"></span>
               <div>
-                <div style="font-weight:700; color:#166534;">コピー完了</div>
-                <div id="__iidx_result_summary" style="font-size:12px; color:#15803d;">クリップボードに保存しました。</div>
+                <div id="__iidx_result_title" style="font-weight:700;"></div>
+                <div id="__iidx_result_summary" style="font-size:12px;"></div>
               </div>
             </div>
             <textarea id="__iidx_output" style="width:100%; height:140px; border:1px solid #e5e7eb; border-radius:8px; font-family:monospace; font-size:11px; padding:10px; resize:none; background:#f9fafb;" readonly></textarea>
             <div style="display:flex; gap:10px; margin-top:16px;">
-              <a href="https://bpi2.poyashi.me/import" target="_blank" style="flex:2; background:#059669; color:#fff; text-decoration:none; padding:12px; border-radius:8px; text-align:center; font-weight:700; font-size:14px;">インポートページを開く</a>
+              <button id="__iidx_btn_copy" class="__iidx_btn" style="display:none; flex:1; background:#7c3aed; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; padding:12px; cursor:pointer;">コピー</button>
+              <a href="https://bpi2.poyashi.me/import" target="_blank" style="flex:2; background:#059669; color:#fff; text-decoration:none; padding:12px; border-radius:8px; text-align:center; font-weight:700; font-size:14px;">BPIM2を開く</a>
               <button id="__iidx_btn_close2" style="flex:1; background:#fff; border:1px solid #e5e7eb; color:#6b7280; border-radius:8px; font-size:14px;">閉じる</button>
             </div>
           </div>
@@ -520,15 +521,40 @@
       const summaryEl = document.getElementById("__iidx_result_summary");
 
       if (outputEl) outputEl.value = finalCsv;
-      if (summaryEl) {
-        summaryEl.textContent = `${Object.keys(songMap).length}曲（${pageCounter.value}ページ）をコピーしました`;
-      }
 
       // Attempt automatic copy to clipboard (may fail without user gesture).
+      let autoCopied = false;
       try {
         await navigator.clipboard.writeText(finalCsv);
+        autoCopied = true;
       } catch (err) {
-        console.error("Auto-copy failed:", err);
+        console.warn("Auto-copy failed:", err);
+      }
+
+      const songCount = Object.keys(songMap).length;
+      const bannerEl = document.getElementById("__iidx_result_banner");
+      const iconEl = document.getElementById("__iidx_result_icon");
+      const titleEl = document.getElementById("__iidx_result_title");
+      const copyBtnEl = document.getElementById("__iidx_btn_copy") as HTMLButtonElement | null;
+
+      if (autoCopied) {
+        if (bannerEl) Object.assign(bannerEl.style, { background: "#f0fdf4", border: "1px solid #bbf7d0" });
+        if (iconEl) iconEl.textContent = "✅";
+        if (titleEl) Object.assign(titleEl, { textContent: "コピー完了", style: "font-weight:700; color:#166534;" });
+        if (summaryEl) Object.assign(summaryEl, { textContent: `${songCount}曲（${pageCounter.value}ページ）をクリップボードにコピーしました`, style: "font-size:12px; color:#15803d;" });
+      } else {
+        if (bannerEl) Object.assign(bannerEl.style, { background: "#fffbeb", border: "1px solid #fde68a" });
+        if (iconEl) iconEl.textContent = "⚠️";
+        if (titleEl) Object.assign(titleEl, { textContent: "取得完了", style: "font-weight:700; color:#92400e;" });
+        if (summaryEl) Object.assign(summaryEl, { textContent: `${songCount}曲（${pageCounter.value}ページ）を取得しました。下のボタンでコピーしてください`, style: "font-size:12px; color:#b45309;" });
+        if (copyBtnEl) {
+          copyBtnEl.style.display = "block";
+          copyBtnEl.onclick = async () => {
+            await navigator.clipboard.writeText(finalCsv);
+            copyBtnEl.textContent = "コピー済み ✓";
+            copyBtnEl.style.background = "#059669";
+          };
+        }
       }
 
       showStep("result");

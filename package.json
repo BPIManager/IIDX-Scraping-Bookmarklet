@@ -1,0 +1,12 @@
+{
+  "name": "iidx-scraping-bookmarklet",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc && terser dist/bookmarklet.js -o dist/bookmarklet.min.js --compress --mangle"
+  },
+  "devDependencies": {
+    "terser": "^5.46.1",
+    "typescript": "^5.0.0"
+  }
+}
