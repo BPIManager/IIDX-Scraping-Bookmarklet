@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "preinstall": "npx only-allow pnpm",
     "build": "tsc && terser dist/bookmarklet.js -o dist/bookmarklet.min.js --compress --mangle"
   },
   "devDependencies": {
