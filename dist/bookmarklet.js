@@ -1,9 +1,9 @@
 "use strict";
 /**
  * @file bookmarklet.ts
- * @description IIDX score importer bookmarklet for BPIM2
+ * @description IIDX score & tower importer bookmarklet for BPIM2
  *
- * Scrapes score data from the KONAMI e-AMUSEMENT GATE difficulty page and
+ * Scrapes score data or tower data from the KONAMI e-AMUSEMENT GATE and
  * exports a CSV compatible with IIDX official CSV format.
  *
  * @usage
@@ -55,8 +55,7 @@
         "☆12",
     ];
     /**
-     * CSV header row.
-     * Fixed columns are followed by five groups of per-difficulty columns.
+     * CSV header row for Score data.
      */
     const HEADERS = [
         "バージョン",
@@ -78,48 +77,21 @@
     // ---------------------------------------------------------------------------
     // Helpers — URL / versioning
     // ---------------------------------------------------------------------------
-    /**
-     * Extracts the IIDX version number from the current page URL.
-     * Falls back to `"33"` (RESIDENT) if no version segment is found.
-     *
-     * @returns The version string, e.g. `"33"`.
-     */
     const detectVersion = () => {
         const match = location.href.match(/\/game\/2dx\/(\d+)\//);
         return match ? match[1] : "33";
     };
     const ver = detectVersion();
-    /**
-     * Fully-qualified URL of the difficulty data endpoint for the current version.
-     * Requests are sent as `application/x-www-form-urlencoded` POST.
-     */
-    const POST_URL = `https://p.eagate.573.jp/game/2dx/${ver}/djdata/music/difficulty.html`;
+    const SCORE_POST_URL = `https://p.eagate.573.jp/game/2dx/${ver}/djdata/music/difficulty.html`;
+    const TOWER_URL = `https://p.eagate.573.jp/game/2dx/${ver}/djdata/tower.html`;
     // ---------------------------------------------------------------------------
     // Helpers — CSV encoding
     // ---------------------------------------------------------------------------
-    /**
-     * Escapes a single value for RFC 4180 CSV output.
-     * Wraps the value in double-quotes and doubles any embedded double-quotes
-     * when the value contains a comma, double-quote, or newline.
-     *
-     * @param value - The raw string to escape.
-     * @returns The CSV-safe string.
-     */
     const escapeCsv = (value) => /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
     // ---------------------------------------------------------------------------
-    // Helpers — HTML parsing
+    // Helpers — HTML parsing (Scores)
     // ---------------------------------------------------------------------------
-    /**
-     * Parses an HTML fragment returned by the GATE difficulty endpoint and
-     * extracts score rows from `.series-difficulty table tr` elements.
-     *
-     * Each `<tr>` is expected to follow this column layout:
-     * | 0: title (anchor) | 1: difficulty | 2: DJ LEVEL img | 3: score | 4: clear lamp img |
-     *
-     * @param html - Raw HTML text from one paginated response.
-     * @returns Array of {@link ChartScore} objects parsed from the table rows.
-     */
-    const parseTable = (html) => {
+    const parseScoreTable = (html) => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(html, "text/html");
         const rows = doc.querySelectorAll(".series-difficulty table tr");
@@ -133,17 +105,13 @@
                 return;
             const title = titleEl.textContent?.trim() ?? "";
             const difficulty = tds[1].textContent?.trim() ?? "";
-            // Score cell contains text like "1234 (567/890)"
             const scoreMatch = (tds[3]?.textContent?.trim() ?? "").match(/(\d+)\s*\((\d+)\/(\d+)\)/);
-            // Clear lamp: encoded in the filename, e.g. "clflg4.gif" → lamp "4"
             const lampImg = tds[4]?.querySelector("img");
             const lampSrc = lampImg?.getAttribute("src") ?? "";
             const lampNum = lampSrc.match(/clflg(\d+)\.gif/)?.[1] ?? "0";
-            // DJ LEVEL: last path segment before ".gif", uppercased
             const djImg = tds[2]?.querySelector("img");
             const djSrc = djImg?.getAttribute("src") ?? "";
             const djLevel = djSrc.match(/\/([^/]+)\.gif/)?.[1].toUpperCase() ?? "---";
-            // Level number embedded in the nearest preceding <th>
             const thEl = row.closest("table")?.querySelector("th");
             const levelMatch = thEl?.textContent?.match(/LEVEL\s*(\d+)/i);
             results.push({
@@ -162,16 +130,7 @@
     // ---------------------------------------------------------------------------
     // Helpers — network
     // ---------------------------------------------------------------------------
-    /**
-     * Fetches one paginated response from the GATE difficulty endpoint.
-     *
-     * @param difficult - Level index (0-based, so ☆1 = 0, ☆12 = 11).
-     * @param offset    - Pagination offset; 0 for the first page, then increments
-     *                    of 50.
-     * @returns The raw HTML response body.
-     * @throws {Error} When the HTTP response status is not OK.
-     */
-    const fetchPage = async (difficult, offset) => {
+    const fetchScorePage = async (difficult, offset) => {
         const body = new URLSearchParams({
             difficult: String(difficult),
             style: "0",
@@ -179,7 +138,7 @@
         });
         if (offset > 0)
             body.append("offset", String(offset));
-        const resp = await fetch(POST_URL, {
+        const resp = await fetch(SCORE_POST_URL, {
             method: "POST",
             headers: { "Content-Type": "application/x-www-form-urlencoded" },
             body: body.toString(),
@@ -192,10 +151,6 @@
     // ---------------------------------------------------------------------------
     // UI helpers
     // ---------------------------------------------------------------------------
-    /**
-     * Injects a shared `<style>` tag with keyframe and button styles.
-     * Idempotent — does nothing if the tag already exists.
-     */
     const injectStyles = () => {
         if (document.getElementById("__iidx_style"))
             return;
@@ -209,12 +164,6 @@
     `;
         document.head.appendChild(st);
     };
-    /**
-     * Builds and returns the modal overlay element with all step sub-panels
-     * pre-rendered but hidden (except for the initial "select" step).
-     *
-     * @returns The root overlay `<div>` element, not yet attached to the DOM.
-     */
     const buildOverlay = () => {
         const overlay = document.createElement("div");
         overlay.id = "__iidx_overlay";
@@ -236,14 +185,31 @@
         <div style="background:#5b21b6; padding:18px 24px; display:flex; align-items:center; justify-content:space-between;">
           <div style="display:flex; align-items:center; gap:10px;">
             <span style="font-size:20px; font-weight:800; color:#fff; letter-spacing:0.5px;">BPIM2</span>
-            <span style="font-size:12px; color:#ddd6fe; opacity:0.9;">Score Importer</span>
+            <span style="font-size:12px; color:#ddd6fe; opacity:0.9;">Data Importer</span>
           </div>
           <button id="__iidx_btn_x" style="background:none; border:none; color:#fff; font-size:24px; cursor:pointer;">&times;</button>
         </div>
 
         <div style="padding:24px;">
-          <div id="__iidx_step_select">
-            <p style="margin:0 0 10px; font-weight:700;">取得モードを選択してください</p>
+          <div id="__iidx_step_select_mode">
+            <p style="margin:0 0 10px; font-weight:700;">取得するデータを選択してください</p>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <button id="__iidx_btn_mode_score" class="__iidx_btn" style="padding:16px; border-radius:12px; background:#faf5ff; border:2px solid #7c3aed; text-align:left;">
+                <div style="font-weight:700; color:#1a1a1a;">スコアデータ</div>
+                <div style="font-size:12px; color:#7c3aed;">各難易度のスコア・クリアランプ等を抽出</div>
+              </button>
+              <button id="__iidx_btn_mode_tower" class="__iidx_btn" style="padding:16px; border-radius:12px; background:#faf5ff; border:2px solid #7c3aed; text-align:left;">
+                <div style="font-weight:700; color:#1a1a1a;">IIDXタワーデータ</div>
+                <div style="font-size:12px; color:#7c3aed;">日別の鍵盤・スクラッチ打鍵数を抽出</div>
+              </button>
+            </div>
+          </div>
+
+          <div id="__iidx_step_select_score" style="display:none;">
+            <div style="display:flex; align-items:center; margin-bottom:10px; gap:8px;">
+              <button id="__iidx_btn_back" style="background:none; border:none; color:#6b7280; cursor:pointer; font-size:14px; padding:0;">◀ 戻る</button>
+              <p style="margin:0; font-weight:700;">スコアの取得範囲を選択してください</p>
+            </div>
             <div style="display:flex; flex-direction:column; gap:12px;">
               <button id="__iidx_btn_all" class="__iidx_btn" style="padding:16px; border-radius:12px; background:#faf5ff; border:2px solid #7c3aed; text-align:left;">
                 <div style="font-weight:700; color:#1a1a1a;">全楽曲を取得する (☆1-12)</div>
@@ -262,8 +228,8 @@
             <div id="__iidx_status_page" style="font-size:13px; color:#6b7280; margin-bottom:24px;"></div>
             <div style="display:inline-flex; align-items:baseline; gap:8px; background:#f5f3ff; border-radius:12px; padding:12px 32px;">
               <span style="font-size:13px; color:#6b7280;">取得件数</span>
-              <span id="__iidx_song_count" style="font-size:32px; font-weight:800; color:#5b21b6;">0</span>
-              <span style="font-size:13px; color:#6b7280;">曲</span>
+              <span id="__iidx_item_count" style="font-size:32px; font-weight:800; color:#5b21b6;">0</span>
+              <span id="__iidx_count_unit" style="font-size:13px; color:#6b7280;">曲</span>
             </div>
           </div>
 
@@ -278,7 +244,7 @@
             <textarea id="__iidx_output" style="width:100%; height:140px; border:1px solid #e5e7eb; border-radius:8px; font-family:monospace; font-size:11px; padding:10px; resize:none; background:#f9fafb;" readonly></textarea>
             <div style="display:flex; gap:10px; margin-top:16px;">
               <button id="__iidx_btn_copy" class="__iidx_btn" style="display:none; flex:1; background:#7c3aed; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; padding:12px; cursor:pointer;">コピー</button>
-              <a href="https://bpi2.poyashi.me/import" target="_blank" style="flex:2; background:#059669; color:#fff; text-decoration:none; padding:12px; border-radius:8px; text-align:center; font-weight:700; font-size:14px;">BPIM2を開く</a>
+              <a id="__iidx_link_bpim" href="https://bpi2.poyashi.me/import" target="_blank" style="flex:2; background:#059669; color:#fff; text-decoration:none; padding:12px; border-radius:8px; text-align:center; font-weight:700; font-size:14px;">BPIM2を開く</a>
               <button id="__iidx_btn_close2" style="flex:1; background:#fff; border:1px solid #e5e7eb; color:#6b7280; border-radius:8px; font-size:14px;">閉じる</button>
             </div>
           </div>
@@ -296,47 +262,29 @@
     `;
         return overlay;
     };
-    /**
-     * Shows the named wizard step panel and hides all others.
-     *
-     * @param name - One of `"select"`, `"progress"`, `"result"`, or `"error"`.
-     */
     const showStep = (name) => {
-        ["select", "progress", "result", "error"].forEach((s) => {
+        ["select_mode", "select_score", "progress", "result", "error"].forEach((s) => {
             const el = document.getElementById(`__iidx_step_${s}`);
             if (el)
                 el.style.display = s === name ? "block" : "none";
         });
     };
     // ---------------------------------------------------------------------------
-    // Core scraping logic
+    // Core scraping logic (Scores)
     // ---------------------------------------------------------------------------
-    /**
-     * Scrapes all pages for a single difficulty level and merges results into
-     * the shared {@link SongMap}.
-     *
-     * Pagination stops when a response returns zero table rows.
-     * A 400 ms delay is inserted between requests to reduce server load.
-     *
-     * @param songMap    - Mutable accumulator that receives scraped data.
-     * @param difficult  - 0-based level index (0 = ☆1 … 11 = ☆12).
-     * @param label      - Human-readable label shown in the progress UI (e.g. `"☆12"`).
-     * @param pageCounter - Mutable object whose `value` is incremented for each
-     *                      fetched page; used to report totals in the result step.
-     */
     const scrapeLevel = async (songMap, difficult, label, pageCounter) => {
         let offset = 0;
         let pageNum = 1;
         while (true) {
             const statusLevel = document.getElementById("__iidx_status_level");
             const statusPage = document.getElementById("__iidx_status_page");
-            const songCountEl = document.getElementById("__iidx_song_count");
+            const itemCountEl = document.getElementById("__iidx_item_count");
             if (statusLevel)
                 statusLevel.textContent = `${label} を取得中...`;
             if (statusPage)
                 statusPage.textContent = `${pageNum} ページ目`;
-            const html = await fetchPage(difficult, offset);
-            const rows = parseTable(html);
+            const html = await fetchScorePage(difficult, offset);
+            const rows = parseScoreTable(html);
             if (rows.length === 0)
                 break;
             rows.forEach((r) => {
@@ -346,8 +294,8 @@
                     songMap[r.title][r.difficulty] = { ...r };
                 }
             });
-            if (songCountEl) {
-                songCountEl.textContent = String(Object.keys(songMap).length);
+            if (itemCountEl) {
+                itemCountEl.textContent = String(Object.keys(songMap).length);
             }
             pageCounter.value += 1;
             offset += 50;
@@ -356,19 +304,7 @@
             await new Promise((resolve) => setTimeout(resolve, 400));
         }
     };
-    // ---------------------------------------------------------------------------
-    // CSV generation
-    // ---------------------------------------------------------------------------
-    /**
-     * Converts a populated {@link SongMap} to a CSV string.
-     *
-     * Songs are sorted alphabetically by title. Difficulties with no score data
-     * are emitted as zeroed-out placeholder columns.
-     *
-     * @param songMap - The fully-populated song map after scraping completes.
-     * @returns A multi-line CSV string beginning with the {@link HEADERS} row.
-     */
-    const buildCsv = (songMap) => {
+    const buildScoreCsv = (songMap) => {
         const csvRows = [HEADERS.join(",")];
         Object.keys(songMap)
             .sort()
@@ -390,29 +326,84 @@
         return csvRows.join("\n");
     };
     // ---------------------------------------------------------------------------
+    // Core scraping logic (Tower)
+    // ---------------------------------------------------------------------------
+    const scrapeTower = async () => {
+        const statusLevel = document.getElementById("__iidx_status_level");
+        const statusPage = document.getElementById("__iidx_status_page");
+        const itemCountEl = document.getElementById("__iidx_item_count");
+        if (statusLevel)
+            statusLevel.textContent = `タワーデータを取得中...`;
+        if (statusPage)
+            statusPage.textContent = ``;
+        const resp = await fetch(TOWER_URL, {
+            method: "GET",
+            credentials: "include",
+        });
+        if (!resp.ok)
+            throw new Error(`HTTP Error: ${resp.status}`);
+        const html = await resp.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const rows = doc.querySelectorAll("table.activity tr");
+        const csvRows = ["プレー日,鍵盤,スクラッチ"];
+        let count = 0;
+        rows.forEach((row) => {
+            const tds = row.querySelectorAll("td");
+            if (tds.length < 3)
+                return;
+            const date = tds[0].textContent?.trim() ?? "";
+            const key = tds[1].textContent?.replace(/回/g, "").trim() ?? "0";
+            const scr = tds[2].textContent?.replace(/回/g, "").trim() ?? "0";
+            csvRows.push(`${date},${key},${scr}`);
+            count++;
+            if (itemCountEl)
+                itemCountEl.textContent = String(count);
+        });
+        if (count === 0) {
+            throw new Error("タワーデータが見つかりませんでした。");
+        }
+        return csvRows.join("\n");
+    };
+    // ---------------------------------------------------------------------------
     // Main run loop
     // ---------------------------------------------------------------------------
-    /**
-     * Orchestrates the full scrape→CSV→clipboard pipeline for the given mode.
-     *
-     * @param overlay - The modal overlay element (used only to close on fatal error).
-     * @param mode    - `"all"` scrapes ☆1–☆12; `"1112"` scrapes only ☆11 and ☆12.
-     */
     const run = async (overlay, mode) => {
-        const levelIndices = mode === "all" ? [...Array(12).keys()] : [10, 11];
-        const songMap = {};
-        const pageCounter = { value: 0 };
         showStep("progress");
+        const unitEl = document.getElementById("__iidx_count_unit");
+        if (unitEl)
+            unitEl.textContent = mode === "tower" ? "日分" : "曲";
         try {
-            for (const lv of levelIndices) {
-                await scrapeLevel(songMap, lv, LEVEL_LABELS[lv], pageCounter);
+            let finalCsv = "";
+            let itemCount = 0;
+            let pageCount = 0;
+            if (mode === "tower") {
+                finalCsv = await scrapeTower();
+                itemCount = finalCsv.split("\n").length - 1; // ヘッダー分を引く
+                pageCount = 1;
             }
-            const finalCsv = buildCsv(songMap);
+            else {
+                const levelIndices = mode === "all" ? [...Array(12).keys()] : [10, 11];
+                const songMap = {};
+                const pageCounter = { value: 0 };
+                for (const lv of levelIndices) {
+                    await scrapeLevel(songMap, lv, LEVEL_LABELS[lv], pageCounter);
+                }
+                finalCsv = buildScoreCsv(songMap);
+                itemCount = Object.keys(songMap).length;
+                pageCount = pageCounter.value;
+            }
             const outputEl = document.getElementById("__iidx_output");
             const summaryEl = document.getElementById("__iidx_result_summary");
+            const bpimLink = document.getElementById("__iidx_link_bpim");
             if (outputEl)
                 outputEl.value = finalCsv;
-            // Attempt automatic copy to clipboard (may fail without user gesture).
+            if (bpimLink) {
+                bpimLink.href =
+                    mode === "tower"
+                        ? "https://bpi2.poyashi.me/import?tab=tower"
+                        : "https://bpi2.poyashi.me/import";
+            }
             let autoCopied = false;
             try {
                 await navigator.clipboard.writeText(finalCsv);
@@ -421,11 +412,12 @@
             catch (err) {
                 console.warn("Auto-copy failed:", err);
             }
-            const songCount = Object.keys(songMap).length;
             const bannerEl = document.getElementById("__iidx_result_banner");
             const iconEl = document.getElementById("__iidx_result_icon");
             const titleEl = document.getElementById("__iidx_result_title");
             const copyBtnEl = document.getElementById("__iidx_btn_copy");
+            const unitStr = mode === "tower" ? "日分のデータ" : "曲";
+            const pageStr = mode === "tower" ? "" : `（${pageCount}ページ）`;
             if (autoCopied) {
                 if (bannerEl)
                     Object.assign(bannerEl.style, {
@@ -441,7 +433,7 @@
                     });
                 if (summaryEl)
                     Object.assign(summaryEl, {
-                        textContent: `${songCount}曲（${pageCounter.value}ページ）をクリップボードにコピーしました`,
+                        textContent: `${itemCount}${unitStr}${pageStr}をクリップボードにコピーしました`,
                         style: "font-size:12px; color:#15803d;",
                     });
             }
@@ -460,7 +452,7 @@
                     });
                 if (summaryEl)
                     Object.assign(summaryEl, {
-                        textContent: `${songCount}曲（${pageCounter.value}ページ）を取得しました。下のボタンでコピーしてください`,
+                        textContent: `${itemCount}${unitStr}${pageStr}を取得しました。下のボタンでコピーしてください`,
                         style: "font-size:12px; color:#b45309;",
                     });
                 if (copyBtnEl) {
@@ -488,24 +480,30 @@
     injectStyles();
     const overlay = buildOverlay();
     document.body.appendChild(overlay);
-    // Initial state: show only the mode-selection step.
-    showStep("select");
-    /** Removes the modal overlay from the DOM. */
+    // Initial state
+    showStep("select_mode");
     const closeModal = () => {
         if (document.body.contains(overlay)) {
             document.body.removeChild(overlay);
         }
     };
+    // Step 1: Mode Select
+    document.getElementById("__iidx_btn_mode_score").onclick = () => showStep("select_score");
+    document.getElementById("__iidx_btn_mode_tower").onclick = () => run(overlay, "tower");
+    // Step 2: Score Select
+    document.getElementById("__iidx_btn_back").onclick =
+        () => showStep("select_mode");
     document.getElementById("__iidx_btn_all").onclick =
         () => run(overlay, "all");
     document.getElementById("__iidx_btn_1112").onclick =
         () => run(overlay, "1112");
+    // Global Actions
     document.getElementById("__iidx_btn_x").onclick =
         closeModal;
     document.getElementById("__iidx_btn_close2").onclick =
         closeModal;
     document.getElementById("__iidx_btn_retry").onclick =
-        () => showStep("select");
+        () => showStep("select_mode");
     // Close on backdrop click.
     overlay.addEventListener("click", (e) => {
         if (e.target === overlay)
