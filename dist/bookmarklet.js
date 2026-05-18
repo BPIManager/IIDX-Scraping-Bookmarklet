@@ -463,7 +463,7 @@
                     mode === "tower"
                         ? "https://bpi2.poyashi.me/import?tab=tower"
                         : mode === "random_lane"
-                            ? "https://bpi2.poyashi.me/import?tab=random_lane"
+                            ? "https://bpi2.poyashi.me/tickets"
                             : "https://bpi2.poyashi.me/import";
             }
             let autoCopied = false;
