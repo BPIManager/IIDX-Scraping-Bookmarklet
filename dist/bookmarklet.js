@@ -84,6 +84,7 @@
     const ver = detectVersion();
     const SCORE_POST_URL = `https://p.eagate.573.jp/game/2dx/${ver}/djdata/music/difficulty.html`;
     const TOWER_URL = `https://p.eagate.573.jp/game/2dx/${ver}/djdata/tower.html`;
+    const RANDOM_LANE_URL = `https://p.eagate.573.jp/game/2dx/${ver}/djdata/random_lane/index.html`;
     // ---------------------------------------------------------------------------
     // Helpers — CSV encoding
     // ---------------------------------------------------------------------------
@@ -201,6 +202,10 @@
               <button id="__iidx_btn_mode_tower" class="__iidx_btn" style="padding:16px; border-radius:12px; background:#faf5ff; border:2px solid #7c3aed; text-align:left;">
                 <div style="font-weight:700; color:#1a1a1a;">IIDXタワーデータ</div>
                 <div style="font-size:12px; color:#7c3aed;">日別の鍵盤・スクラッチ打鍵数を抽出</div>
+              </button>
+              <button id="__iidx_btn_mode_random_lane" class="__iidx_btn" style="padding:16px; border-radius:12px; background:#faf5ff; border:2px solid #7c3aed; text-align:left;">
+                <div style="font-weight:700; color:#1a1a1a;">ランダムレーンチケット</div>
+                <div style="font-size:12px; color:#7c3aed;">所持チケットの配置番号と有効期限を抽出</div>
               </button>
             </div>
           </div>
@@ -326,6 +331,55 @@
         return csvRows.join("\n");
     };
     // ---------------------------------------------------------------------------
+    // Core scraping logic (Random Lane Tickets)
+    // ---------------------------------------------------------------------------
+    const scrapeRandomLane = async () => {
+        const statusLevel = document.getElementById("__iidx_status_level");
+        const statusPage = document.getElementById("__iidx_status_page");
+        const itemCountEl = document.getElementById("__iidx_item_count");
+        const csvRows = ["チケット番号,有効期限"];
+        let page = 0;
+        while (true) {
+            if (statusLevel)
+                statusLevel.textContent = "ランダムレーンチケットを取得中...";
+            if (statusPage)
+                statusPage.textContent = `${page + 1} ページ目`;
+            const resp = await fetch(`${RANDOM_LANE_URL}?page=${page}`, {
+                method: "GET",
+                credentials: "include",
+            });
+            if (!resp.ok)
+                throw new Error(`HTTP Error: ${resp.status}`);
+            const html = await resp.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const ticketList = doc.getElementById("ticket-list");
+            const rows = ticketList
+                ? Array.from(ticketList.querySelectorAll("ul:not(.head)"))
+                : [];
+            if (rows.length === 0)
+                break;
+            rows.forEach((ul) => {
+                const lis = ul.querySelectorAll("li");
+                if (lis.length < 2)
+                    return;
+                const ticketNo = lis[0].textContent?.trim() ?? "";
+                const expiry = lis[1].textContent?.trim() ?? "";
+                if (ticketNo) {
+                    csvRows.push(`${ticketNo},${expiry}`);
+                    if (itemCountEl)
+                        itemCountEl.textContent = String(csvRows.length - 1);
+                }
+            });
+            page++;
+            await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+        if (csvRows.length <= 1) {
+            throw new Error("ランダムレーンチケットが見つかりませんでした。");
+        }
+        return csvRows.join("\n");
+    };
+    // ---------------------------------------------------------------------------
     // Core scraping logic (Tower)
     // ---------------------------------------------------------------------------
     const scrapeTower = async () => {
@@ -372,12 +426,18 @@
         showStep("progress");
         const unitEl = document.getElementById("__iidx_count_unit");
         if (unitEl)
-            unitEl.textContent = mode === "tower" ? "日分" : "曲";
+            unitEl.textContent =
+                mode === "tower" ? "日分" : mode === "random_lane" ? "枚" : "曲";
         try {
             let finalCsv = "";
             let itemCount = 0;
             let pageCount = 0;
-            if (mode === "tower") {
+            if (mode === "random_lane") {
+                finalCsv = await scrapeRandomLane();
+                itemCount = finalCsv.split("\n").length - 1;
+                pageCount = 1;
+            }
+            else if (mode === "tower") {
                 finalCsv = await scrapeTower();
                 itemCount = finalCsv.split("\n").length - 1; // ヘッダー分を引く
                 pageCount = 1;
@@ -402,7 +462,9 @@
                 bpimLink.href =
                     mode === "tower"
                         ? "https://bpi2.poyashi.me/import?tab=tower"
-                        : "https://bpi2.poyashi.me/import";
+                        : mode === "random_lane"
+                            ? "https://bpi2.poyashi.me/import?tab=random_lane"
+                            : "https://bpi2.poyashi.me/import";
             }
             let autoCopied = false;
             try {
@@ -416,7 +478,11 @@
             const iconEl = document.getElementById("__iidx_result_icon");
             const titleEl = document.getElementById("__iidx_result_title");
             const copyBtnEl = document.getElementById("__iidx_btn_copy");
-            const unitStr = mode === "tower" ? "日分のデータ" : "曲";
+            const unitStr = mode === "tower"
+                ? "日分のデータ"
+                : mode === "random_lane"
+                    ? "枚のチケット"
+                    : "曲";
             const pageStr = mode === "tower" ? "" : `（${pageCount}ページ）`;
             if (autoCopied) {
                 if (bannerEl)
@@ -490,6 +556,7 @@
     // Step 1: Mode Select
     document.getElementById("__iidx_btn_mode_score").onclick = () => showStep("select_score");
     document.getElementById("__iidx_btn_mode_tower").onclick = () => run(overlay, "tower");
+    document.getElementById("__iidx_btn_mode_random_lane").onclick = () => run(overlay, "random_lane");
     // Step 2: Score Select
     document.getElementById("__iidx_btn_back").onclick =
         () => showStep("select_mode");
